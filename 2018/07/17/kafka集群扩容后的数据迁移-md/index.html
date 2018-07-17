@@ -4,24 +4,25 @@
 <head>
   <meta charset="UTF-8">
   
-    <title>王迎接的博客</title>
+    <title>kafka集群扩容后的数据迁移.md | 王迎接的博客</title>
     <meta name="viewport" content="width=device-width, initial-scale=1,user-scalable=no">
     
     <meta name="author" content="wangyingjiejt">
     
 
     
-    <meta name="description" content="技术 生活">
+    <meta name="description" content="最近我们生产环境的kafka集群有增加节点的需求，然而kafka在新增节点后并不会像elasticsearch那样感知到新节点加入后自动将数据reblance到新集群中，因此这个过程需要我们手动分配。一番折腾之后，实现了增加kafka集群节点并将原有数据均匀分配到扩容后的集群。下面结合一个例子谈一下整个过程。 一、环境说明1.集群状况假定当前的cluster中只有（101，102，103）三个ka">
 <meta name="keywords" content="java kafka elasticsearch">
-<meta property="og:type" content="website">
-<meta property="og:title" content="王迎接的博客">
-<meta property="og:url" content="http://yoursite.com/index.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="kafka集群扩容后的数据迁移.md">
+<meta property="og:url" content="http://yoursite.com/2018/07/17/kafka集群扩容后的数据迁移-md/index.html">
 <meta property="og:site_name" content="王迎接的博客">
-<meta property="og:description" content="技术 生活">
+<meta property="og:description" content="最近我们生产环境的kafka集群有增加节点的需求，然而kafka在新增节点后并不会像elasticsearch那样感知到新节点加入后自动将数据reblance到新集群中，因此这个过程需要我们手动分配。一番折腾之后，实现了增加kafka集群节点并将原有数据均匀分配到扩容后的集群。下面结合一个例子谈一下整个过程。 一、环境说明1.集群状况假定当前的cluster中只有（101，102，103）三个ka">
 <meta property="og:locale" content="default">
+<meta property="og:updated_time" content="2018-07-17T13:53:11.673Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="王迎接的博客">
-<meta name="twitter:description" content="技术 生活">
+<meta name="twitter:title" content="kafka集群扩容后的数据迁移.md">
+<meta name="twitter:description" content="最近我们生产环境的kafka集群有增加节点的需求，然而kafka在新增节点后并不会像elasticsearch那样感知到新节点加入后自动将数据reblance到新集群中，因此这个过程需要我们手动分配。一番折腾之后，实现了增加kafka集群节点并将原有数据均匀分配到扩容后的集群。下面结合一个例子谈一下整个过程。 一、环境说明1.集群状况假定当前的cluster中只有（101，102，103）三个ka">
 
     
     <link rel="alternative" href="/atom.xml" title="王迎接的博客" type="application/atom+xml">
@@ -75,12 +76,10 @@
 </div>
     </header>
     <div id="container">
-      <div id="main">
-
-   
-    
-    <article class="post-expand post" itemprop="articleBody"> 
-        <header class="article-info clearfix">
+      <div id="main" class="post" itemscope itemprop="blogPost">
+  
+	<article itemprop="articleBody"> 
+		<header class="article-info clearfix">
   <h1 itemprop="name">
     
       <a href="/2018/07/17/kafka集群扩容后的数据迁移-md/" title="kafka集群扩容后的数据迁移.md" itemprop="url">kafka集群扩容后的数据迁移.md</a>
@@ -94,9 +93,16 @@
     
   </p>
 </header>
-    <div class="article-content">
-        
-        <p>最近我们生产环境的kafka集群有增加节点的需求，然而kafka在新增节点后并不会像elasticsearch那样感知到新节点加入后自动将数据reblance到新集群中，因此这个过程需要我们手动分配。一番折腾之后，实现了增加kafka集群节点并将原有数据均匀分配到扩容后的集群。下面结合一个例子谈一下整个过程。</p>
+	<div class="article-content">
+		
+		<div id="toc" class="toc-article">
+			<strong class="toc-title">Contents</strong>
+		
+			<ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#一、环境说明"><span class="toc-number">1.</span> <span class="toc-text">一、环境说明</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-集群状况"><span class="toc-number">1.1.</span> <span class="toc-text">1.集群状况</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-目的"><span class="toc-number">1.2.</span> <span class="toc-text">2.目的</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#二、操作步骤"><span class="toc-number">2.</span> <span class="toc-text">二、操作步骤</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#1、生成重新分配topic的方案"><span class="toc-number">2.1.</span> <span class="toc-text">1、生成重新分配topic的方案</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-执行分配方案"><span class="toc-number">2.2.</span> <span class="toc-text">2.执行分配方案</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-查看配过程进"><span class="toc-number">2.3.</span> <span class="toc-text">3.查看配过程进</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#三、其它"><span class="toc-number">3.</span> <span class="toc-text">三、其它</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#One-more-thing"><span class="toc-number">3.1.</span> <span class="toc-text">One more thing</span></a></li></ol></li></ol>
+		
+		</div>
+		
+		<p>最近我们生产环境的kafka集群有增加节点的需求，然而kafka在新增节点后并不会像elasticsearch那样感知到新节点加入后自动将数据reblance到新集群中，因此这个过程需要我们手动分配。一番折腾之后，实现了增加kafka集群节点并将原有数据均匀分配到扩容后的集群。下面结合一个例子谈一下整个过程。</p>
 <h1 id="一、环境说明"><a href="#一、环境说明" class="headerlink" title="一、环境说明"></a>一、环境说明</h1><h2 id="1-集群状况"><a href="#1-集群状况" class="headerlink" title="1.集群状况"></a>1.集群状况</h2><p>假定当前的cluster中只有（101，102，103）三个kafka节点，有一个名为think_tank的topic，该topic有2个replica，均匀分布在三个节点上.</p>
 <h2 id="2-目的"><a href="#2-目的" class="headerlink" title="2.目的"></a>2.目的</h2><p>我们要做的是在cluster中新增两个节点（记为104，105）后，将的数据均匀分到新集群中的5个节点上。</p>
 <h1 id="二、操作步骤"><a href="#二、操作步骤" class="headerlink" title="二、操作步骤"></a>二、操作步骤</h1><blockquote>
@@ -127,14 +133,9 @@
 <p>另外，如果有增加replica的个数的需求，同样可以使用这个脚本，可以翻一下官网文档。</p>
 <h2 id="One-more-thing"><a href="#One-more-thing" class="headerlink" title="One more thing"></a>One more thing</h2><p>一点儿感触，在确定问题所在后，官方的文档应该作为我们优先考虑的一个重要资料源，网上的资料由于时间较早、版本不同的原因，解决方式可能需要细微的改动才能达到目的，这些坑在官方的一手资料上其实是可以规避的。</p>
 <p>欢迎拍砖，欢迎交流~</p>
-
-        
-        
-        <p class="article-more-link">
-          
-       </p>
-    </div>
-    <footer class="article-footer clearfix">
+  
+	</div>
+		<footer class="article-footer clearfix">
 <div class="article-catetags">
 
 
@@ -142,82 +143,45 @@
 
 
 
-
-<div class="comments-count">
+	<div class="article-share" id="share">
 	
-</div>
+	  <div data-url="http://yoursite.com/2018/07/17/kafka集群扩容后的数据迁移-md/" data-title="kafka集群扩容后的数据迁移.md | 王迎接的博客" data-tsina="3292258805" class="share clearfix">
+	  </div>
+	
+	</div>
+
 
 </footer>
 
-
-    </article>
-
-
-
-
-
-
-   
-    
-    <article class="post-expand post" itemprop="articleBody"> 
-        <header class="article-info clearfix">
-  <h1 itemprop="name">
-    
-      <a href="/2018/07/10/hello-world/" title="Hello World" itemprop="url">Hello World</a>
-  </h1>
-  <p class="article-author">By
-       
-		<a href="/about" title="wangyingjiejt" target="_blank" itemprop="author">wangyingjiejt</a>
-		
-  <p class="article-time">
-    <time datetime="2018-07-10T13:24:02.768Z" itemprop="datePublished"> Published 2018-07-10</time>
-    
-  </p>
-</header>
-    <div class="article-content">
-        
-        <p>Welcome to <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="noopener">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="noopener">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="noopener">GitHub</a>.</p>
-<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new <span class="string">"My New Post"</span></span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="noopener">Writing</a></p>
-<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="noopener">Server</a></p>
-<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="noopener">Generating</a></p>
-<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/deployment.html" target="_blank" rel="noopener">Deployment</a></p>
-
-        
-        
-        <p class="article-more-link">
-          
-       </p>
-    </div>
-    <footer class="article-footer clearfix">
-<div class="article-catetags">
-
-
-</div>
-
-
-
-
-<div class="comments-count">
+   	       
+	</article>
 	
+<nav class="article-nav clearfix">
+ 
+
+<div class="next">
+<a href="/2018/07/10/hello-world/"  title="Hello World">
+ <strong>下一篇：</strong><br/> 
+ <span>Hello World
+</span>
+</a>
 </div>
 
-</footer>
+</nav>
 
-
-    </article>
-
-
+	
 
 
 
-
-
-</div>
+</div>  
       <div class="openaside"><a class="navbutton" href="#" title="Show Sidebar"></a></div>
+
+  <div id="toc" class="toc-aside">
+  <strong class="toc-title">Contents</strong>
+ 
+ <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#一、环境说明"><span class="toc-number">1.</span> <span class="toc-text">一、环境说明</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-集群状况"><span class="toc-number">1.1.</span> <span class="toc-text">1.集群状况</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-目的"><span class="toc-number">1.2.</span> <span class="toc-text">2.目的</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#二、操作步骤"><span class="toc-number">2.</span> <span class="toc-text">二、操作步骤</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#1、生成重新分配topic的方案"><span class="toc-number">2.1.</span> <span class="toc-text">1、生成重新分配topic的方案</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-执行分配方案"><span class="toc-number">2.2.</span> <span class="toc-text">2.执行分配方案</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-查看配过程进"><span class="toc-number">2.3.</span> <span class="toc-text">3.查看配过程进</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#三、其它"><span class="toc-number">3.</span> <span class="toc-text">三、其它</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#One-more-thing"><span class="toc-number">3.1.</span> <span class="toc-text">One more thing</span></a></li></ol></li></ol>
+ 
+  </div>
 
 <div id="asidepart">
 <div class="closeaside"><a class="closebutton" href="#" title="Hide Sidebar"></a></div>
@@ -360,12 +324,89 @@ $(document).ready(function(){
       m.removeClass('moveMain');
       a.css('display', 'block').removeClass('fadeOut');
       o.css('display', 'none');
+      
+      $('#toc.toc-aside').css('display', 'none');
         
     }
   });
 });
 </script>
 
+<script type="text/javascript">
+$(document).ready(function(){ 
+  var ai = $('.article-content>iframe'),
+      ae = $('.article-content>embed'),
+      t  = $('#toc'),
+      ta = $('#toc.toc-aside'),
+      o  = $('.openaside'),
+      c  = $('.closeaside');
+  if(ai.length>0){
+    ai.wrap('<div class="video-container" />');
+  };
+  if(ae.length>0){
+   ae.wrap('<div class="video-container" />');
+  };
+  c.click(function(){
+    ta.css('display', 'block').addClass('fadeIn');
+  });
+  o.click(function(){
+    ta.css('display', 'none');
+  });
+  $(window).scroll(function(){
+    ta.css("top",Math.max(140,320-$(this).scrollTop()));
+  });
+});
+</script>
+
+
+<script type="text/javascript">
+$(document).ready(function(){ 
+  var $this = $('.share'),
+      url = $this.attr('data-url'),
+      encodedUrl = encodeURIComponent(url),
+      title = $this.attr('data-title'),
+      tsina = $this.attr('data-tsina'),
+      description = $this.attr('description');
+  var html = [
+  '<div class="hoverqrcode clearfix"></div>',
+  '<a class="overlay" id="qrcode"></a>',
+  '<a href="https://www.facebook.com/sharer.php?u=' + encodedUrl + '" class="article-share-facebook" target="_blank" title="Facebook"></a>',
+  '<a href="https://twitter.com/intent/tweet?url=' + encodedUrl + '" class="article-share-twitter" target="_blank" title="Twitter"></a>',
+  '<a href="#qrcode" class="article-share-qrcode" title="微信"></a>',
+  '<a href="http://widget.renren.com/dialog/share?resourceUrl=' + encodedUrl + '&srcUrl=' + encodedUrl + '&title=' + title +'" class="article-share-renren" target="_blank" title="人人"></a>',
+  '<a href="http://service.weibo.com/share/share.php?title='+title+'&url='+encodedUrl +'&ralateUid='+ tsina +'&searchPic=true&style=number' +'" class="article-share-weibo" target="_blank" title="微博"></a>',
+  '<span title="Share to"></span>'
+  ].join('');
+  $this.append(html);
+
+  $('.hoverqrcode').hide();
+
+  var myWidth = 0;
+  function updatehoverqrcode(){
+    if( typeof( window.innerWidth ) == 'number' ) {
+      myWidth = window.innerWidth;
+    } else if( document.documentElement && document.documentElement.clientWidth) {
+      myWidth = document.documentElement.clientWidth;
+    };
+    var qrsize = myWidth > 1024 ? 200:100;
+    var options = {render: 'image', size: qrsize, fill: '#2ca6cb', text: url, radius: 0.5, quiet: 1};
+    var p = $('.article-share-qrcode').position();
+    $('.hoverqrcode').empty().css('width', qrsize).css('height', qrsize)
+                          .css('left', p.left-qrsize/2+20).css('top', p.top-qrsize-10)
+                          .qrcode(options);
+  };
+  $(window).resize(function(){
+    $('.hoverqrcode').hide();
+  });
+  $('.article-share-qrcode').click(function(){
+    updatehoverqrcode();
+    $('.hoverqrcode').toggle();
+  });
+  $('.article-share-qrcode').hover(function(){}, function(){
+      $('.hoverqrcode').hide();
+  });
+});   
+</script>
 
 
 
@@ -438,4 +479,4 @@ var _hmt = _hmt || [];
 <!-- Tiny_search End -->
 
   </body>
- </html>
+</html>
