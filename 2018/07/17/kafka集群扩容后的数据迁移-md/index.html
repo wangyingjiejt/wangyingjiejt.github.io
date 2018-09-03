@@ -68,7 +68,7 @@
 
 
 
-  <meta name="keywords" content="kafka," />
+  <meta name="keywords" content="kafka,消息队列," />
 
 
 
@@ -80,14 +80,14 @@
 
 
 <meta name="description" content="最近我们生产环境的kafka集群有增加节点的需求，然而kafka在新增节点后并不会像elasticsearch那样感知到新节点加入后自动将数据reblance到新集群中，因此这个过程需要我们手动分配。一番折腾之后，实现了增加kafka集群节点并将原有数据均匀分配到扩容后的集群。下面结合一个例子谈一下整个过程。 一、环境说明1.集群状况假定当前的cluster中只有（101，102，103）三个ka">
-<meta name="keywords" content="kafka">
+<meta name="keywords" content="kafka,消息队列">
 <meta property="og:type" content="article">
 <meta property="og:title" content="kafka集群扩容后的数据迁移.md">
 <meta property="og:url" content="http://yoursite.com/2018/07/17/kafka集群扩容后的数据迁移-md/index.html">
 <meta property="og:site_name" content="王迎接的博客">
 <meta property="og:description" content="最近我们生产环境的kafka集群有增加节点的需求，然而kafka在新增节点后并不会像elasticsearch那样感知到新节点加入后自动将数据reblance到新集群中，因此这个过程需要我们手动分配。一番折腾之后，实现了增加kafka集群节点并将原有数据均匀分配到扩容后的集群。下面结合一个例子谈一下整个过程。 一、环境说明1.集群状况假定当前的cluster中只有（101，102，103）三个ka">
 <meta property="og:locale" content="default">
-<meta property="og:updated_time" content="2018-09-02T14:09:31.761Z">
+<meta property="og:updated_time" content="2018-09-03T15:45:41.455Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="kafka集群扩容后的数据迁移.md">
 <meta name="twitter:description" content="最近我们生产环境的kafka集群有增加节点的需求，然而kafka在新增节点后并不会像elasticsearch那样感知到新节点加入后自动将数据reblance到新集群中，因此这个过程需要我们手动分配。一番折腾之后，实现了增加kafka集群节点并将原有数据均匀分配到扩容后的集群。下面结合一个例子谈一下整个过程。 一、环境说明1.集群状况假定当前的cluster中只有（101，102，103）三个ka">
@@ -202,7 +202,7 @@
       
         
         <li class="menu-item menu-item-标签">
-          <a href="/tag/" rel="section">
+          <a href="/tags" rel="section">
             
               <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
             
@@ -212,21 +212,11 @@
       
         
         <li class="menu-item menu-item-目录">
-          <a href="/content/" rel="section">
+          <a href="/categories" rel="section">
             
-              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
             
             目录
-          </a>
-        </li>
-      
-        
-        <li class="menu-item menu-item-技术">
-          <a href="/tec" rel="section">
-            
-              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
-            
-            技术
           </a>
         </li>
       
@@ -325,8 +315,8 @@
               
               
                 <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/技术/" itemprop="url" rel="index">
-                    <span itemprop="name">技术</span>
+                  <a href="/categories/kafka/" itemprop="url" rel="index">
+                    <span itemprop="name">kafka</span>
                   </a>
                 </span>
 
@@ -412,6 +402,8 @@
           
             <a href="/tags/kafka/" rel="tag"># kafka</a>
           
+            <a href="/tags/消息队列/" rel="tag"># 消息队列</a>
+          
         </div>
       
 
@@ -419,6 +411,22 @@
       
       
 
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2018/09/03/设计指南及请求返回规范-md/" rel="prev" title="设计指南及请求返回规范.md">
+                设计指南及请求返回规范.md <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
       
 
       
@@ -492,7 +500,7 @@
               
                 <a href="/archives/">
               
-                  <span class="site-state-item-count">1</span>
+                  <span class="site-state-item-count">2</span>
                   <span class="site-state-item-name">posts</span>
                 </a>
               </div>
@@ -502,10 +510,10 @@
               
               
               <div class="site-state-item site-state-categories">
-                
-                  <span class="site-state-item-count">1</span>
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">2</span>
                   <span class="site-state-item-name">categories</span>
-                
+                </a>
               </div>
             
 
@@ -513,10 +521,10 @@
               
               
               <div class="site-state-item site-state-tags">
-                
-                  <span class="site-state-item-count">1</span>
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">3</span>
                   <span class="site-state-item-name">tags</span>
-                
+                </a>
               </div>
             
 
