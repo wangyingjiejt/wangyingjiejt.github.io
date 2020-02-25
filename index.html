@@ -263,6 +263,443 @@
   
   
   <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/02/24/springboot自动配置/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="wangyingjiejt">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="王迎接的博客">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2020/02/24/springboot自动配置/" itemprop="url">结合tk.mybatis插件源码，说说spring boot如何实现自动注入</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2020-02-24T10:51:14+08:00">
+                2020-02-24
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/spring/" itemprop="url" rel="index">
+                    <span itemprop="name">spring</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h2 id="一、前言"><a href="#一、前言" class="headerlink" title="一、前言"></a>一、前言</h2><p>自动配置是spring boot 一个重要特性，所谓“自动”就是我们直接引用功能所需jar包，除了极个别的核心配置外，几乎不用额外的配置，从而减少繁琐配置项，也就是常说的约定大于配置思想的体现。下面结合mybatis插件–tk.mybatis说说spring boot如何实现的自动配置的。</p>
+<blockquote>
+<p>tk.mybatis可以看做是mybatis框架的一个插件，项目提供了常规的增删改查操作以及Example 相关的单表操作。通用 Mapper 是为了解决 MyBatis 使用中 90% 的基本操作，使用它可以很方便的进行开发，可以节省开发人员大量的时间。<a href="[https://github.com/abel533/Mapper/wiki](https://github.com/abel533/Mapper/wiki">项目地址</a><br>)</p>
+</blockquote>
+<h2 id="二、实现原理"><a href="#二、实现原理" class="headerlink" title="二、实现原理"></a>二、实现原理</h2><h4 id="1、spring-boot入口"><a href="#1、spring-boot入口" class="headerlink" title="1、spring boot入口"></a>1、spring boot入口</h4><p>既然是自动配置，肯定是在spring boot启动中实现的注入，我们来从spring的入口找寻答案：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@SpringBootApplication</span> <span class="comment">//spring boot启动的核心注解</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">NewMediaMpApiApplication</span> </span></span><br><span class="line"><span class="class"></span></span><br><span class="line">    public static void main(String[] args) &#123;</span><br><span class="line">        SpringApplication.run(NewMediaMpApiApplication.class, args);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这是spring boot 最简单的启动类，点开<strong>@SpringBootApplication</strong>这个注解看下。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Target</span>(ElementType.TYPE)</span><br><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.RUNTIME)</span><br><span class="line"><span class="meta">@Documented</span></span><br><span class="line"><span class="meta">@Inherited</span></span><br><span class="line"><span class="meta">@SpringBootConfiguration</span></span><br><span class="line"><span class="meta">@EnableAutoConfiguration</span><span class="comment">//开启自动配置类</span></span><br><span class="line"><span class="meta">@ComponentScan</span>(excludeFilters = &#123;</span><br><span class="line">		<span class="meta">@Filter</span>(type = FilterType.CUSTOM, classes = TypeExcludeFilter.class),</span><br><span class="line">		<span class="meta">@Filter</span>(type = FilterType.CUSTOM, classes = AutoConfigurationExcludeFilter.class) &#125;)</span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> SpringBootApplication &#123;</span><br><span class="line">  <span class="comment">//omit code ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="2、自动配置入口"><a href="#2、自动配置入口" class="headerlink" title="2、自动配置入口"></a>2、自动配置入口</h4><p>这个注解是有多个注解复合而成，其中<strong>@EnableAutoConfiguration</strong>由名字可以看它应该就是实现自动配置的入口，顺便说一下,@Enable**开头的注解在spring boot中往往都是开启xx功能的入口，我们在看源码的时候可以从这里入手。跟进去看看：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Target</span>(ElementType.TYPE)</span><br><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.RUNTIME)</span><br><span class="line"><span class="meta">@Documented</span></span><br><span class="line"><span class="meta">@Inherited</span></span><br><span class="line"><span class="meta">@AutoConfigurationPackage</span></span><br><span class="line"><span class="meta">@Import</span>(AutoConfigurationImportSelector.class)</span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> EnableAutoConfiguration &#123;</span><br><span class="line">   <span class="comment">//omit code ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个注解的描述官方给出的描述是：</p>
+<blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&gt; Enable auto-configuration of the Spring Application Context, attempting to guess and configure beans that you are likely to need</span><br><span class="line">&gt;</span><br></pre></td></tr></table></figure>
+</blockquote>
+<p>即，为spring容器上下文开启自动配置，尝试猜测你需要加载哪些配置bean。</p>
+<h4 id="3、收集需要配的类"><a href="#3、收集需要配的类" class="headerlink" title="3、收集需要配的类"></a>3、收集需要配的类</h4><p>顺着@Import可以找到，整个自动配置的实现都是通过AutoConfigurationImportSelector这个选择器实现把jar中需要的组件导入到spring IOC容器中这一功能。（@Import是通过导入的方式将类加载到spring容器中的），AutoConfigurationImportSelector实现了ImportSelector接口，官方文档是这么描述这个接口的：</p>
+<blockquote>
+<p>  Interface to be implemented by types that determine which @{@link Configuration}, class(es) should be imported based on a given selection criteria, usually one or more annotation attributes.</p>
+</blockquote>
+<p>文档说的很明白，实现这个接口的类按照给定的选择条件（通常是注解中的一个或多个属性），筛选出需要注入的配置类。该接口定义了一个方法：返回满足条件配置类的数组。我们看下AutoConfigurationImportSelector是如何实现这个方法的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> String[] selectImports(AnnotationMetadata annotationMetadata) &#123;</span><br><span class="line">	<span class="keyword">if</span> (!isEnabled(annotationMetadata)) &#123;</span><br><span class="line">		<span class="keyword">return</span> NO_IMPORTS;</span><br><span class="line">	&#125;</span><br><span class="line">	AutoConfigurationMetadata autoConfigurationMetadata = AutoConfigurationMetadataLoader</span><br><span class="line">			.loadMetadata(<span class="keyword">this</span>.beanClassLoader);</span><br><span class="line">   <span class="comment">//核心方法，获取满足条件的配置信息</span></span><br><span class="line">	AutoConfigurationEntry autoConfigurationEntry = getAutoConfigurationEntry(</span><br><span class="line">			autoConfigurationMetadata, annotationMetadata);</span><br><span class="line">	<span class="keyword">return</span> StringUtils.toStringArray(autoConfigurationEntry.getConfigurations());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>核心方法就是获取配置类信息，我们往下继续跟进到底是怎么获取的配置：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> AutoConfigurationEntry <span class="title">getAutoConfigurationEntry</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">		AutoConfigurationMetadata autoConfigurationMetadata,</span></span></span><br><span class="line"><span class="function"><span class="params">		AnnotationMetadata annotationMetadata)</span> </span>&#123;</span><br><span class="line">	<span class="keyword">if</span> (!isEnabled(annotationMetadata)) &#123;</span><br><span class="line">		<span class="keyword">return</span> EMPTY_ENTRY;</span><br><span class="line">	&#125;</span><br><span class="line">	AnnotationAttributes attributes = getAttributes(annotationMetadata);</span><br><span class="line">   <span class="comment">//获取所有候选的配置信息</span></span><br><span class="line">	List&lt;String&gt; configurations = getCandidateConfigurations(annotationMetadata,</span><br><span class="line">			attributes);</span><br><span class="line">   <span class="comment">//过滤掉重复的</span></span><br><span class="line">	configurations = removeDuplicates(configurations);</span><br><span class="line">   <span class="comment">//排除掉明确需要排除的配置</span></span><br><span class="line">	Set&lt;String&gt; exclusions = getExclusions(annotationMetadata, attributes);</span><br><span class="line">	checkExcludedClasses(configurations, exclusions);</span><br><span class="line">	configurations.removeAll(exclusions);</span><br><span class="line">	configurations = filter(configurations, autoConfigurationMetadata);</span><br><span class="line">	fireAutoConfigurationImportEvents(configurations, exclusions);</span><br><span class="line">	<span class="keyword">return</span> <span class="keyword">new</span> AutoConfigurationEntry(configurations, exclusions);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个方法主要的功能是获取了候选的配置类，然后再按规则过滤掉，这里只关注如何获取候选配置类的，往下走：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Return the auto-configuration class names that should be considered</span></span><br><span class="line"><span class="comment"> * 返回认为需要自动配置的类</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">protected</span> List&lt;String&gt; <span class="title">getCandidateConfigurations</span><span class="params">(AnnotationMetadata metadata,</span></span></span><br><span class="line"><span class="function"><span class="params">		AnnotationAttributes attributes)</span> </span>&#123;</span><br><span class="line">   <span class="comment">//主要方法，加载配置</span></span><br><span class="line">	List&lt;String&gt; configurations = SpringFactoriesLoader.loadFactoryNames(</span><br><span class="line">			getSpringFactoriesLoaderFactoryClass(), getBeanClassLoader());</span><br><span class="line">	Assert.notEmpty(configurations,</span><br><span class="line">			<span class="string">"No auto configuration classes found in META-INF/spring.factories. If you "</span></span><br><span class="line">					+ <span class="string">"are using a custom packaging, make sure that file is correct."</span>);</span><br><span class="line">	<span class="keyword">return</span> configurations;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>####4、配置类是从哪里加载的呢？</p>
+<p>我们看到加载配置类的方法了，胜利就在前方，进SpringFactoriesLoader.loadFactoryNames()方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> List&lt;String&gt; <span class="title">loadFactoryNames</span><span class="params">(Class&lt;?&gt; factoryClass, @Nullable ClassLoader classLoader)</span> </span>&#123;</span><br><span class="line">		String factoryClassName = factoryClass.getName();</span><br><span class="line">		<span class="keyword">return</span> loadSpringFactories(classLoader).getOrDefault(factoryClassName, Collections.emptyList());</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//loadFactoryNames主要调用的方法</span></span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">static</span> Map&lt;String, List&lt;String&gt;&gt; loadSpringFactories(<span class="meta">@Nullable</span> ClassLoader classLoader) &#123;</span><br><span class="line">		MultiValueMap&lt;String, String&gt; result = cache.get(classLoader);</span><br><span class="line">		<span class="keyword">if</span> (result != <span class="keyword">null</span>) &#123;</span><br><span class="line">			<span class="keyword">return</span> result;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="keyword">try</span> &#123;</span><br><span class="line">      <span class="comment">//FACTORIES_RESOURCE_LOCATION的值 "META-INF/spring.factories"</span></span><br><span class="line">			Enumeration&lt;URL&gt; urls = (classLoader != <span class="keyword">null</span> ?</span><br><span class="line">					classLoader.getResources(FACTORIES_RESOURCE_LOCATION) :                     </span><br><span class="line">					ClassLoader.getSystemResources(FACTORIES_RESOURCE_LOCATION));</span><br><span class="line">			result = <span class="keyword">new</span> LinkedMultiValueMap&lt;&gt;();</span><br><span class="line">      <span class="comment">//根据spring.factories配置中的value值获取候选的配置类</span></span><br><span class="line">			<span class="keyword">while</span> (urls.hasMoreElements()) &#123;</span><br><span class="line">        <span class="comment">//循环遍历配置项的值</span></span><br><span class="line">				URL url = urls.nextElement();</span><br><span class="line">				UrlResource resource = <span class="keyword">new</span> UrlResource(url);</span><br><span class="line">				Properties properties = PropertiesLoaderUtils.loadProperties(resource);</span><br><span class="line">				<span class="keyword">for</span> (Map.Entry&lt;?, ?&gt; entry : properties.entrySet()) &#123;</span><br><span class="line">					String factoryClassName = ((String) entry.getKey()).trim();</span><br><span class="line">					<span class="keyword">for</span> (String factoryName : StringUtils.commaDelimitedListToStringArray((String) entry.getValue())) &#123;</span><br><span class="line">            <span class="comment">//将配置类的文件路径加入到结果集中</span></span><br><span class="line">						result.add(factoryClassName, factoryName.trim());</span><br><span class="line">					&#125;</span><br><span class="line">				&#125;</span><br><span class="line">			&#125;</span><br><span class="line">			cache.put(classLoader, result);</span><br><span class="line">			<span class="keyword">return</span> result;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">catch</span> (IOException ex) &#123;</span><br><span class="line">			<span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"Unable to load factories from location ["</span> +</span><br><span class="line">					FACTORIES_RESOURCE_LOCATION + <span class="string">"]"</span>, ex);</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br></pre></td></tr></table></figure>
+<p>至此，我们找到自动配置加载的起始位置： META-INF/spring.factories。spring通过SpringFactoriesLoader.loadFactoryNames()扫描Java jar包下META-INF/spring.factories文件，获取所有需要加载的配置类，从而初始化到spring容器中。</p>
+<p>下面我们去看下使用自动配置的jar包中看是否是这样实现的，用前文说到我们以tk.mybaits为例：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/14480907-b912eb91a942dab1.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="1.png" style="zoom: 67%;"></p>
+<p>打开spring.factories文件看看配置文件里的内容：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/14480907-d09b3429d3ef5f59.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="image.png"></p>
+<p>这个配置文件告诉spring，<strong>MapperAutoConfiguration</strong>就是tk.mybaits的配置类，根据此配置类将运行所需的内容注入到spring的IOC容器中。</p>
+<h2 id="三、tk加载到spring容器中"><a href="#三、tk加载到spring容器中" class="headerlink" title="三、tk加载到spring容器中"></a>三、tk加载到spring容器中</h2><h4 id="1、MapperAutoConfiguration配置文件详解"><a href="#1、MapperAutoConfiguration配置文件详解" class="headerlink" title="1、MapperAutoConfiguration配置文件详解"></a>1、MapperAutoConfiguration配置文件详解</h4><p>我们来详细学习下这个配置类，简化细节：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//声明这是一个配置类</span></span><br><span class="line"><span class="meta">@org</span>.springframework.context.annotation.Configuration</span><br><span class="line"><span class="comment">//这两个配置类必须存在才能初始换当前配置类</span></span><br><span class="line"><span class="meta">@ConditionalOnClass</span>(&#123;SqlSessionFactory.class, SqlSessionFactoryBean.class&#125;)</span><br><span class="line"><span class="comment">//spring容器中必须存在DatcSource才会初始化当前配置类</span></span><br><span class="line"><span class="meta">@ConditionalOnBean</span>(DataSource.class)</span><br><span class="line"><span class="comment">//导入MybatisProperties.class文件中的关于mybatis的配置</span></span><br><span class="line"><span class="meta">@EnableConfigurationProperties</span>(&#123;MybatisProperties.class&#125;)</span><br><span class="line"><span class="comment">//当前配置类必须在DataSourceAutoConfiguration.class加载后才能初始化</span></span><br><span class="line"><span class="meta">@AutoConfigureAfter</span>(DataSourceAutoConfiguration.class)</span><br><span class="line"><span class="comment">//当前配置类必须在MybatisAutoConfiguration加载之前才能初始化</span></span><br><span class="line"><span class="meta">@AutoConfigureBefore</span>(name = <span class="string">"org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration"</span>)</span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">MapperAutoConfiguration</span> </span>&#123;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">//omit code...</span></span><br><span class="line">  </span><br><span class="line">  		<span class="comment">//从spring中为MapperAutoConfiguration赋值</span></span><br><span class="line">      <span class="function"><span class="keyword">public</span> <span class="title">MapperAutoConfiguration</span><span class="params">(MybatisProperties properties,</span></span></span><br><span class="line"><span class="function"><span class="params">                                   ObjectProvider&lt;Interceptor[]&gt; interceptorsProvider,</span></span></span><br><span class="line"><span class="function"><span class="params">                                   ResourceLoader resourceLoader,</span></span></span><br><span class="line"><span class="function"><span class="params">                                   ObjectProvider&lt;DatabaseIdProvider&gt; databaseIdProvider,</span></span></span><br><span class="line"><span class="function"><span class="params">                                   ObjectProvider&lt;List&lt;ConfigurationCustomizer&gt;&gt; configurationCustomizersProvider)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.properties = properties;</span><br><span class="line">        <span class="keyword">this</span>.interceptors = interceptorsProvider.getIfAvailable();</span><br><span class="line">        <span class="keyword">this</span>.resourceLoader = resourceLoader;</span><br><span class="line">        <span class="keyword">this</span>.databaseIdProvider = databaseIdProvider.getIfAvailable();</span><br><span class="line">        <span class="keyword">this</span>.configurationCustomizers = configurationCustomizersProvider.getIfAvailable();</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">  	<span class="comment">//如果spring容器中没有sqlSessionFactory，注入这个bean</span></span><br><span class="line">    <span class="meta">@Bean</span></span><br><span class="line">    <span class="meta">@ConditionalOnMissingBean</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> SqlSessionFactory <span class="title">sqlSessionFactory</span><span class="params">(DataSource dataSource)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line"></span><br><span class="line">      <span class="comment">//omit code ...</span></span><br><span class="line">    &#125;</span><br><span class="line">  </span><br><span class="line">  </span><br><span class="line">  	<span class="comment">//如果spring容器中没有sqlSessionTemplate，注入这个bean</span></span><br><span class="line">    <span class="meta">@Bean</span>  </span><br><span class="line">    <span class="meta">@ConditionalOnMissingBean</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> SqlSessionTemplate <span class="title">sqlSessionTemplate</span><span class="params">(SqlSessionFactory sqlSessionFactory)</span> </span>&#123;</span><br><span class="line">      <span class="comment">//omit code ...</span></span><br><span class="line">    &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">//这个是整个tk.mybatis的核心配置文件，即扫描</span></span><br><span class="line">  <span class="keyword">public</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">AutoConfiguredMapperScannerRegistrar</span></span></span><br><span class="line"><span class="class">            <span class="keyword">implements</span> <span class="title">BeanFactoryAware</span>, <span class="title">ImportBeanDefinitionRegistrar</span>, <span class="title">ResourceLoaderAware</span>, <span class="title">EnvironmentAware</span> </span>&#123;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">//扫描所有被@Mapper注解修饰的接口，也是在这一个过程中，tk生成了内置的常用方法的sql，用于调用时在mybatis执行</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">registerBeanDefinitions</span><span class="params">(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">            logger.debug(<span class="string">"Searching for mappers annotated with @Mapper"</span>);</span><br><span class="line">          </span><br><span class="line">            <span class="comment">//omit code...</span></span><br><span class="line">        &#125;</span><br><span class="line">    <span class="comment">//omit code ...</span></span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>本配置类的注解描述部分，主要声明了所依赖的bean，需要以及初始化所需要的属性，是初始化到spring容器的先决条件。tk作为mybatis的插件，在加载数据源先关组件后，加载mybatis前插入tk加载过程，使用上述注解组合达到这个目的。前置条件满足后，最终目的还是AutoConfiguredMapperScannerRegistrar配置的加载，即tk生成了内置的常用方法的sql，用于调用时在mybatis执行。</p>
+<h4 id="2、-Configuration配合使用的常见注解"><a href="#2、-Configuration配合使用的常见注解" class="headerlink" title="2、@Configuration配合使用的常见注解"></a>2、@Configuration配合使用的常见注解</h4><p>另外，还有写配合@Configuration使用的常见注解：</p>
+<ol>
+<li><p>属性类注解</p>
+<ul>
+<li><p>EnableConfigurationProperties</p>
+</li>
+<li><p>@ConfigurationProperties(prefix = “xxx”)  </p>
+<blockquote>
+<p>在需要注入配置的类上加上这个注解，prefix的意思是，以该前缀打头的配置,@EnableConfigurationProperties({MybatisProperties.class})  开启tk.mybatis的配置项</p>
+</blockquote>
+</li>
+</ul>
+</li>
+<li><p>条件系列注解，@Conditon*</p>
+<ul>
+<li><p>@ConditionalOnBean  仅仅在当前上下文中存在某个对象时，才会实例化一个Bean</p>
+<blockquote>
+<p>@ConditionalOnBean(DataSource.class)  表示容器中已经注入了数据源的对象</p>
+</blockquote>
+</li>
+<li><p>@ConditionalOnClass   某个class位于类路径上，才会实例化一个Bean)，该注解的参数对应的类必须存在，否则不解析该注解修饰的配置类</p>
+<blockquote>
+<p>@ConditionalOnClass({SqlSessionFactory.class, SqlSessionFactoryBean.class})  表示必须要存在这两个和数据路连接相关的类</p>
+</blockquote>
+</li>
+<li><p>@ConditionalOnExpression  当表达式为true的时候，才会实例化一个Bean</p>
+</li>
+<li><p>@ConditionalOnMissingBean  仅仅在当前上下文中不存在某个对象时，才会实例化一个Bean</p>
+</li>
+<li><p>@ConditionalOnMissingClass  某个class类路径上不存在的时候，才会实例化一个Bean</p>
+</li>
+<li><p>@ConditionalOnNotWebApplication  不是web应用时，才会执行</p>
+</li>
+</ul>
+</li>
+<li><p>顺序系列注解</p>
+<ul>
+<li><p>@AutoConfigureAfter 在加载配置的类之后再加载当前类</p>
+<blockquote>
+<p>@AutoConfigureAfter(DataSourceAutoConfiguration.class)  表示在加载数据源的配置之后加载tk.mybatis的配置类</p>
+</blockquote>
+</li>
+<li><p>@AutoConfigureBefore  在加载配置的类之后再加载当前类</p>
+<blockquote>
+<p>@AutoConfigureBefore(name = “org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration”) 表示要在mybatis配置类加载前完成tk.mybatis的注入</p>
+</blockquote>
+</li>
+</ul>
+</li>
+</ol>
+<p>至此，spring将tk运行所需的全部组件在启动时注入到spring的IOC容器中。</p>
+<p>####3、spring boot内置的自动配置项</p>
+<p>从而实现了spring boot的自动配置，了解整个过程后，我们就可以知道spring boot中那些导入包简单配置下就能用的原理了，比如Spring data jpa 、Spring data redis等配置上连接地址就可以用了，其实秘密就在于此，我们来看下spring boot 中的内置的自动配置：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/14480907-28245da5ccd3f2a5.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="spring boot 内置.png"><br>是不是看着很眼熟，这就是spring boot常说的“简化配置”的关键所在。</p>
+<h2 id="四、自动配置的思维导图"><a href="#四、自动配置的思维导图" class="headerlink" title="四、自动配置的思维导图"></a>四、自动配置的思维导图</h2><p>我将自动配置的过程整理成思维导图帮助理解和理解，如下：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/14480907-165b39b9d66493a9.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="spring boot 自动配置.png"></p>
+<p>欢迎拍砖，欢迎交流~</p>
+<p>注：转载请注明出处</p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/11/17/秒杀场景的多种优化手段-md/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="wangyingjiejt">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="王迎接的博客">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2019/11/17/秒杀场景的多种优化手段-md/" itemprop="url">秒杀场景的多种优化手段.md</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2019-11-17T22:31:43+08:00">
+                2019-11-17
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/web/" itemprop="url" rel="index">
+                    <span itemprop="name">web</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="一步步实现秒杀活动的优化总结"><a href="#一步步实现秒杀活动的优化总结" class="headerlink" title="一步步实现秒杀活动的优化总结"></a><strong>一步步实现秒杀活动的优化</strong>总结</h1><p>秒杀在很多电商项目中是很常见的应用场景，其本质上是一个瞬时发起大量请求的高并发的场景。这篇总结主要从后台服务的角度，从以下几个方向，一步一步优化代码，不断地提高系统可支撑的并发发访问量：</p>
+<ol>
+<li><p>利用数据的行锁，保证商品不超卖、不漏卖</p>
+</li>
+<li><p>从JVM级别在内存中加缓存进行优化</p>
+</li>
+<li><p>引入消息中间件，异步生成订单，进一步高系统响应能力</p>
+</li>
+<li><p>使用Redis加缓存，解决分布式系统下的加缓存问题</p>
+</li>
+<li><p>加入限流算法，保证系统真正的响应量可控</p>
+<h2 id="开始之前"><a href="#开始之前" class="headerlink" title="开始之前"></a>开始之前</h2></li>
+</ol>
+<p>本文聚焦如何优化系统的响应能力，尽量简化业务模型，仅保留商品库存表、订单表：</p>
+<ul>
+<li>商品库存表sql：</li>
+</ul>
+<hr>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">-- ----------------------------</span><br><span class="line">-- Table structure for tbl_product</span><br><span class="line">-- ----------------------------</span><br><span class="line">DROP TABLE IF EXISTS `tbl_product`;</span><br><span class="line">CREATE TABLE `tbl_product` (</span><br><span class="line">  `id` varchar(32) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL COMMENT &apos;商品id&apos;,</span><br><span class="line">  `name` varchar(50) CHARACTER SET utf8 COLLATE utf8_general_ci DEFAULT NULL COMMENT &apos;商品名&apos;,</span><br><span class="line">  `price` double DEFAULT NULL COMMENT &apos;商品价格&apos;,</span><br><span class="line">  `stock` int(11) DEFAULT NULL COMMENT &apos;商品库存&apos;,</span><br><span class="line">  PRIMARY KEY (`id`)</span><br><span class="line">) ENGINE=InnoDB DEFAULT CHARSET=utf8;</span><br><span class="line"></span><br><span class="line">SET FOREIGN_KEY_CHECKS = 1;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>订单表sql：</li>
+</ul>
+<hr>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">-- Table structure for tbl_order</span><br><span class="line"></span><br><span class="line">------</span><br><span class="line"></span><br><span class="line">DROP TABLE IF EXISTS `tbl_order`;</span><br><span class="line">CREATE TABLE `tbl_order` (</span><br><span class="line">  `id` varchar(64) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL COMMENT &apos;订单id&apos;,</span><br><span class="line">  `product_id` varchar(32) CHARACTER SET utf8 COLLATE utf8_general_ci DEFAULT NULL COMMENT &apos;商品id&apos;,</span><br><span class="line">  `amount` double DEFAULT NULL COMMENT &apos;订单金额&apos;,</span><br><span class="line">  `create_time` timestamp NULL DEFAULT NULL COMMENT &apos;订单生成时间&apos;,</span><br><span class="line">  PRIMARY KEY (`id`)</span><br><span class="line">) ENGINE=InnoDB DEFAULT CHARSET=utf8;</span><br><span class="line"></span><br><span class="line">SET FOREIGN_KEY_CHECKS = 1;</span><br></pre></td></tr></table></figure>
+<h4 id="一、利用数据的行锁，保证商品不超卖、不漏卖"><a href="#一、利用数据的行锁，保证商品不超卖、不漏卖" class="headerlink" title="一、利用数据的行锁，保证商品不超卖、不漏卖"></a>一、利用数据的行锁，保证商品不超卖、不漏卖</h4><p>商品秒杀中后台最核心的三个步骤：查库存–&gt;生成订单–&gt;减库存</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> String <span class="title">buyProduct</span><span class="params">(String id)</span> </span>&#123;</span><br><span class="line">        <span class="comment">//查库存</span></span><br><span class="line">        Product product = productMapper.getProduct(id);</span><br><span class="line">        <span class="keyword">if</span> (product.getStock() &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> MsgUtils.fail(<span class="string">"商品已售完！"</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//生成订单</span></span><br><span class="line">        Order myOrder = <span class="keyword">new</span> Order();</span><br><span class="line">        myOrder.setId(UUID.randomUUID().toString());</span><br><span class="line">        myOrder.setAmount(product.getPrice());</span><br><span class="line">        myOrder.setCreateTime(<span class="keyword">new</span> Date());</span><br><span class="line">        myOrder.setProductId(product.getId());</span><br><span class="line"></span><br><span class="line">        <span class="comment">//减库存</span></span><br><span class="line">        <span class="keyword">int</span> num = productMapper.reduceStock(id);</span><br><span class="line">        <span class="keyword">if</span> (num &gt; <span class="number">0</span>) &#123;</span><br><span class="line">            orderMapper.insert(myOrder);</span><br><span class="line">            <span class="keyword">return</span> MsgUtils.success(<span class="string">"购买成功"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> MsgUtils.fail(<span class="string">"商品已售完"</span>);</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p>我们看下这个思路有没有问题？</p>
+<p>并发场景下，在卖最后一件商品时，若还没有进行到减库存的操作，此时其它请求进来购买商品，查库存发现商品尚未售完，同样会进入执行购买的后续流程，最终都会去减库存，导致库存量小于0，出现超卖问题。</p>
+<p>如下，我们可以利用MySQL的行锁来解决这个问题：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">update tbl_product set stock =stock-1 where id=#&#123;id&#125; and stock&gt;0</span><br></pre></td></tr></table></figure>
+<p>Mysql（使用InnoDB作为存储引擎）在更新单条数据时，会阻塞其它对这条数据的修改操作，我们利用这一特性</p>
+<p>串行的更改库存，当库存量大于0时才会更新记录，更改库存的结果作为判断是否购买成功的标志，从而避免超卖问题。接下里用jmeter测试下性能如何。</p>
+<blockquote>
+<p><strong>Jmeter</strong>是apache开源的一个压测工具，是开发人员在进行接口抗压测试的好帮手，用数据直观的反馈调试结果。</p>
+</blockquote>
+<p>仅使用数据库时的QPS平均为108.8/s </p>
+<p><code>summary =   2000 in 00:00:18 =  108.8/s Avg:  9836 Min:     5 Max: 16368 Err:     1 (0.05%)</code></p>
+<h4 id="二、从JVM级别在内存中加缓存进行优化"><a href="#二、从JVM级别在内存中加缓存进行优化" class="headerlink" title="二、从JVM级别在内存中加缓存进行优化"></a>二、从JVM级别在内存中加缓存进行优化</h4><p>分析购买过程,查库存阶段,商品卖完后进入的请求再去查数据库判断库存剩余量是多余的,可以在商品卖完后设置一个售罄的标志位,以减少查库操作提高系统性能.</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> HashMap&lt;String,Boolean&gt; sellOutFlag =<span class="keyword">new</span> HashMap&lt;&gt;();<span class="comment">//key是商品id，value记录售罄标志</span></span><br></pre></td></tr></table></figure>
+<p>查库存时，先查询该商品是否已售罄，未售罄则查询数据库,在商品售罄时设置该标志位：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> String <span class="title">buyProduct</span><span class="params">(String id)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//查库存</span></span><br><span class="line">    <span class="keyword">if</span> (<span class="keyword">null</span>!= sellOutFlag.get(id))&#123;</span><br><span class="line">        <span class="keyword">return</span> MsgUtils.fail(<span class="string">"商品已售完！"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    Product product = productMapper.getProduct(id);</span><br><span class="line">    <span class="keyword">if</span> (product.getStock() &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> MsgUtils.fail(<span class="string">"商品已售完！"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//生成订单</span></span><br><span class="line">    Order myOrder = <span class="keyword">new</span> Order();</span><br><span class="line">    myOrder.setId(UUID.randomUUID().toString());</span><br><span class="line">    myOrder.setAmount(product.getPrice());</span><br><span class="line">    myOrder.setCreateTime(<span class="keyword">new</span> Date());</span><br><span class="line">    myOrder.setProductId(product.getId());</span><br><span class="line">    <span class="comment">//减库存</span></span><br><span class="line">    <span class="keyword">int</span> num = productMapper.reduceStock(id);</span><br><span class="line">    <span class="keyword">if</span> (num &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        orderMapper.insert(myOrder);</span><br><span class="line">        <span class="keyword">return</span> MsgUtils.success(<span class="string">"购买成功"</span>);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        sellOutFlag.put(id,<span class="keyword">true</span>);</span><br><span class="line">        <span class="keyword">return</span> MsgUtils.fail(<span class="string">"商品已售完"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在加入jvm内存缓存优化后，系统的QPS: 192.1/s ，系统抗压能力增长了一倍。</p>
+<p><code>summary =   2000 in 00:00:10 =  192.1/s Avg:  5038 Min:   229 Max:  8423 Err:     0 (0.00%)</code></p>
+<p>引入消息中间件，异步生成订单，进一步高系统响应能力</p>
+<h4 id="三、使用MQ（消息队列）进行解耦业务进行优化"><a href="#三、使用MQ（消息队列）进行解耦业务进行优化" class="headerlink" title="三、使用MQ（消息队列）进行解耦业务进行优化"></a>三、使用MQ（消息队列）进行解耦业务进行优化</h4><p>上一步优化了商品售罄后的处理流程以提高响应速度，接下来从业务的其它阶段进行优化。在秒杀业务场景中，最重要的是抢购商品，用户更关心的是否我抢到了商品，像支付、查看订单等操作是可接受不那么即使响应的，这给我们提供了另一种常用的手段去提高系统的响应速度，即购买成功之后的减库存、生成订单的操作丢到<strong>消息队列</strong>里慢慢去执行，这大大缩短了一次购买请求中用户需要等地的链路。另外，我们真的有必要每次查库获取库存么？商品的库存量完全可以在第一次查询后放到内存中去维护从而减少查库的开销。</p>
+<p>每个商品第一次被购买就将商品库存缓存到内存中，如果商品库存为0，则直接返回商品售罄，否则减库存数量之后，将购买的后续步骤丢到MQ中去处理，直接返回给前端结果购买成功：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">    <span class="comment">//查库存</span></span><br><span class="line">    <span class="keyword">if</span> (<span class="keyword">null</span> == stockMap.get(id)) &#123;</span><br><span class="line">        Optional&lt;Product&gt; productOpt = Optional.ofNullable(productMapper.getProduct(id));</span><br><span class="line">        Integer stock = productOpt.map(Product::getStock).orElse(<span class="number">0</span>);</span><br><span class="line">        stockMap.put(id, stock);</span><br><span class="line">        productOpt.ifPresent(p -&gt; productMap.put(id, p));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (stockMap.get(id) &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> MsgUtils.fail(<span class="string">"商品已售完！"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//生成订单,减库存交由mq异步处理</span></span><br><span class="line">    rabbitTemplate.convertAndSend(<span class="string">"OrderDirectExchange"</span>, <span class="string">"Order2dbDirectRouting"</span>, productMap.get(id));<span class="comment">//绑定键已在DirectRabbitConfig中配置</span></span><br><span class="line">    reduceStock(id);<span class="comment">//减库存</span></span><br><span class="line">    <span class="keyword">return</span> MsgUtils.success(<span class="string">"购买成功！"</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>MQ监听消息，减数据库内存，生成订单：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">Order myOrder = <span class="keyword">new</span> Order();</span><br><span class="line"> myOrder.setId(UUID.randomUUID().toString());</span><br><span class="line"> myOrder.setAmount(product.getPrice());</span><br><span class="line"> myOrder.setCreateTime(<span class="keyword">new</span> Date());</span><br><span class="line"> myOrder.setProductId(product.getId());</span><br><span class="line"> <span class="comment">//减库存</span></span><br><span class="line"> <span class="keyword">int</span> num = productMapper.reduceStock(product.getId());</span><br><span class="line"> <span class="keyword">if</span> (num &gt; <span class="number">0</span>) &#123;</span><br><span class="line">     orderMapper.insert(myOrder);</span><br><span class="line"> &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">     <span class="comment">//创建订单失败，商品库存加+1</span></span><br><span class="line">     MqSeckillService.incrStock(product.getId());</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+<p>注意库存的增减要加锁，防止高并发下库存量异常：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 库存减一</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">reduceStock</span><span class="params">(String id)</span></span>&#123;</span><br><span class="line">    Integer currentStock = stockMap.get(id);</span><br><span class="line">    stockMap.put(id,currentStock-<span class="number">1</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 库存加一</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">incrStock</span><span class="params">(String id)</span></span>&#123;</span><br><span class="line">    Integer currentStock = stockMap.get(id);</span><br><span class="line">    stockMap.put(id,currentStock+<span class="number">1</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>消费失败或者减库存失败，要将已经扣除的库存补偿回来，避免少卖问题。</p>
+<p>使用消息队列将下单购买和生成订单减库存解耦开来，看下压测效果:</p>
+<p><code>summary =   2000 in 00:00:08 =  251.7/s Avg:  2729 Min:    65 Max:  6112 Err:     0 (0.00%)</code></p>
+<p>通过以上几种手段已经把系统的响应能力提高了不少（我测试环境中的Mysql、RabbitMQ都是本地连接阿里云，性能瓶颈受限制于网络，真实环境中QPS会高很多，这里只是说明问题），但真实的场景中，秒杀系统肯定是多节点部署，但是以上优化中的缓存都是加在JVM内存中，各节点之间数据是隔离的，多节点下库存量不共享，肯定是无法满足要求。因此要引入Redis解决这一问题。</p>
+<h4 id="四、使用Redis加缓存，解决分布式系统下的加缓存问题"><a href="#四、使用Redis加缓存，解决分布式系统下的加缓存问题" class="headerlink" title="四、使用Redis加缓存，解决分布式系统下的加缓存问题"></a>四、使用Redis加缓存，解决分布式系统下的加缓存问题</h4><p>在第三步的基础上，把使用的JVM内存替换成redis作为缓存工具，定义两个缓存建：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 商品库存量，&#123;0&#125;用商品id替换</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> String PRODUCT_STOCK_REDIS_KEY=<span class="string">"product:stock:&#123;0&#125;"</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 商品详情，&#123;0&#125;用商品id替换</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> String PRODUCT_DETAIL_REDIS_KEY=<span class="string">"product:detail:&#123;0&#125;"</span>;</span><br></pre></td></tr></table></figure>
+<p>替换第三步缓存</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">String productStockRedisKey = MessageFormat.format(RedisConstant.PRODUCT_STOCK_REDIS_KEY, id);</span><br><span class="line"><span class="comment">//查库存</span></span><br><span class="line">Object stockObj = redisTemplate.opsForValue().get(productStockRedisKey);</span><br><span class="line">Integer stock = <span class="keyword">null</span>;</span><br><span class="line"><span class="keyword">if</span> (<span class="keyword">null</span> == stockObj) &#123;</span><br><span class="line">    Optional&lt;Product&gt; productOpt = Optional.ofNullable(productMapper.getProduct(id));</span><br><span class="line">    stock = productOpt.map(Product::getStock).orElse(<span class="number">0</span>);</span><br><span class="line">    <span class="comment">//缓存库存量</span></span><br><span class="line">    redisTemplate.opsForValue().set(productStockRedisKey, stock);</span><br><span class="line">    productOpt.ifPresent(p -&gt; &#123;</span><br><span class="line">        <span class="comment">//缓存商品信息详情</span></span><br><span class="line">        String productDetailRedisKey = MessageFormat.format(RedisConstant.PRODUCT_DETAIL_REDIS_KEY, id);</span><br><span class="line">        redisTemplate.opsForValue().set(productDetailRedisKey, p);</span><br><span class="line">    &#125;);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    stock = (Integer) stockObj;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>由于redis本身就是单线程，不用做库存增减的同步。</p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
     <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/09/03/设计指南及请求返回规范-md/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -689,7 +1126,7 @@
               
                 <a href="/archives/">
               
-                  <span class="site-state-item-count">2</span>
+                  <span class="site-state-item-count">4</span>
                   <span class="site-state-item-name">posts</span>
                 </a>
               </div>
@@ -700,7 +1137,7 @@
               
               <div class="site-state-item site-state-categories">
                 <a href="/categories/index.html">
-                  <span class="site-state-item-count">2</span>
+                  <span class="site-state-item-count">3</span>
                   <span class="site-state-item-name">categories</span>
                 </a>
               </div>
@@ -711,7 +1148,7 @@
               
               <div class="site-state-item site-state-tags">
                 <a href="/tags/index.html">
-                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-count">5</span>
                   <span class="site-state-item-name">tags</span>
                 </a>
               </div>
@@ -776,7 +1213,7 @@
 
     <footer id="footer" class="footer">
       <div class="footer-inner">
-        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2020</span>
   <span class="with-love">
     <i class="fa fa-user"></i>
   </span>
