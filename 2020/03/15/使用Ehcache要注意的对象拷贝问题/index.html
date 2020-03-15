@@ -87,7 +87,7 @@
 <meta property="og:site_name" content="王迎接的博客">
 <meta property="og:description" content="一、前言最近工作中使用到Spring Ehcache作为一级缓存以减轻对redis的压力，在代码改造后遇到了一个对象拷贝的问题，在这里记录下踩到的坑。 将获取的文章详情使用ehcache缓存到本地内从中，访问量大的时候会先走本地缓存拿数据，然后再Redis、数据库,ehcache相关代码如下： 123456@Cacheable(value = EhCacheSpaceKey.ContentApi.">
 <meta property="og:locale" content="default">
-<meta property="og:updated_time" content="2020-03-15T13:09:35.671Z">
+<meta property="og:updated_time" content="2020-03-15T13:30:08.581Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="使用Ehcache要注意的对象拷贝问题">
 <meta name="twitter:description" content="一、前言最近工作中使用到Spring Ehcache作为一级缓存以减轻对redis的压力，在代码改造后遇到了一个对象拷贝的问题，在这里记录下踩到的坑。 将获取的文章详情使用ehcache缓存到本地内从中，访问量大的时候会先走本地缓存拿数据，然后再Redis、数据库,ehcache相关代码如下： 123456@Cacheable(value = EhCacheSpaceKey.ContentApi.">
@@ -363,8 +363,7 @@
 <li>浅拷贝 ， 就是仅把原来对象的属性值复制到新对象对应属性上，对于基本类型属性，会对值进行复制，而引用类型属性则是直接复制应用对象的地址，这就导致复制后的新对象会依赖原对象的属性。</li>
 <li>深拷贝，基础类型属性和浅拷贝的一致，引用类型属性则是新生成一个引用，把原属性里的内容复制到新引用中，这样拷贝出来的对象，和原来的对象完全独立。</li>
 </ul>
-<p>###2、Cloneable接口</p>
-<p>我们可以实现Cloneable接口进行代码拷贝，构造两个对象进行说明</p>
+<h3 id="2、Cloneable接口"><a href="#2、Cloneable接口" class="headerlink" title="2、Cloneable接口"></a>2、Cloneable接口</h3><p>我们可以实现Cloneable接口进行代码拷贝，构造两个对象进行说明</p>
 <p>Address：</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Address</span> <span class="keyword">implements</span> <span class="title">Cloneable</span></span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> String city;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> String street;</span><br><span class="line"></span><br><span class="line">		<span class="comment">//标准构造方法、setter、getter省略</span></span><br><span class="line"></span><br><span class="line">  	<span class="comment">//重写toString方法，便于输出结果</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">toString</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="string">"Address&#123;"</span> +</span><br><span class="line">                <span class="string">"city='"</span> + city + <span class="string">'\''</span> +</span><br><span class="line">                <span class="string">", street='"</span> + street + <span class="string">'\''</span> +</span><br><span class="line">                <span class="string">'&#125;'</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <p>User:</p>
@@ -586,7 +585,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#一、前言"><span class="nav-number">1.</span> <span class="nav-text">一、前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#二、对象拷贝"><span class="nav-number">2.</span> <span class="nav-text">二、对象拷贝</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1、基本概念"><span class="nav-number">2.1.</span> <span class="nav-text">1、基本概念</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3、重写Clone-方法，实现深拷贝"><span class="nav-number">2.2.</span> <span class="nav-text">3、重写Clone()方法，实现深拷贝</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#三、总结"><span class="nav-number">3.</span> <span class="nav-text">三、总结</span></a></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#一、前言"><span class="nav-number">1.</span> <span class="nav-text">一、前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#二、对象拷贝"><span class="nav-number">2.</span> <span class="nav-text">二、对象拷贝</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1、基本概念"><span class="nav-number">2.1.</span> <span class="nav-text">1、基本概念</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2、Cloneable接口"><span class="nav-number">2.2.</span> <span class="nav-text">2、Cloneable接口</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3、重写Clone-方法，实现深拷贝"><span class="nav-number">2.3.</span> <span class="nav-text">3、重写Clone()方法，实现深拷贝</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#三、总结"><span class="nav-number">3.</span> <span class="nav-text">三、总结</span></a></li></ol></div>
             
 
           </div>
