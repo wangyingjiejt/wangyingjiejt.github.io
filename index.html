@@ -263,6 +263,181 @@
   
   
   <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/03/15/使用Ehcache要注意的对象拷贝问题/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="wangyingjiejt">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="王迎接的博客">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2020/03/15/使用Ehcache要注意的对象拷贝问题/" itemprop="url">使用Ehcache要注意的对象拷贝问题</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2020-03-15T20:59:48+08:00">
+                2020-03-15
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Java/" itemprop="url" rel="index">
+                    <span itemprop="name">Java</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h2 id="一、前言"><a href="#一、前言" class="headerlink" title="一、前言"></a>一、前言</h2><p>最近工作中使用到Spring Ehcache作为一级缓存以减轻对redis的压力，在代码改造后遇到了一个对象拷贝的问题，在这里记录下踩到的坑。</p>
+<p>将获取的文章详情使用ehcache缓存到本地内从中，访问量大的时候会先走本地缓存拿数据，然后再Redis、数据库,ehcache相关代码如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Cacheable</span>(value = EhCacheSpaceKey.ContentApi.EHCACHE_DETAIL_CONTENTVO, key = <span class="string">"#root.targetClass.name+#root.methodName+#id"</span>)</span><br><span class="line"><span class="function"><span class="keyword">public</span> ContentApiVo <span class="title">getContentDetail</span><span class="params">(String id)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//获取文章详情</span></span><br><span class="line">    <span class="keyword">return</span> contentApiVo;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>测试时发现响应确实更快、redis的压力也小了，就在以为大功告成时，发现串数据的问题，看代码是如何翻车的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> String <span class="title">getContentDetail</span><span class="params">(String contentId, String id, String userId, String appId, Integer contentType)</span> </span>&#123;</span><br><span class="line">  </span><br><span class="line">   ContentApiVo contentApiVoCache = ehCacheService.getContentDetail(id);</span><br><span class="line">  </span><br><span class="line">  <span class="comment">//处理数据</span></span><br><span class="line">        </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>拿到缓存中的contentApiVoCache后，进行数据处理然后返回给前端，但是在请求量起来后会出现串数据的现象，排查后发现问题出在了contentApiVoCache这个对象上，原因在于ehcache在命中缓存后，会直接返该对象，也就是再一次缓存周期中，<strong>每次返回的都是同一个对象</strong>，后续的数据处理必然会改变数据的内容。所以在需要改变缓存结果的操作时，所以要拷贝一个新的对象进行操作。这里就引出了对象拷贝。</p>
+<h2 id="二、对象拷贝"><a href="#二、对象拷贝" class="headerlink" title="二、对象拷贝"></a>二、对象拷贝</h2><h3 id="1、基本概念"><a href="#1、基本概念" class="headerlink" title="1、基本概念"></a>1、基本概念</h3><p>在Java中谈到对象拷贝，我们主要是说<strong>浅拷贝（shallow copy）</strong>、<strong>深拷贝（deep copy）</strong>两种方式。</p>
+<ul>
+<li>浅拷贝 ， 就是仅把原来对象的属性值复制到新对象对应属性上，对于基本类型属性，会对值进行复制，而引用类型属性则是直接复制应用对象的地址，这就导致复制后的新对象会依赖原对象的属性。</li>
+<li>深拷贝，基础类型属性和浅拷贝的一致，引用类型属性则是新生成一个引用，把原属性里的内容复制到新引用中，这样拷贝出来的对象，和原来的对象完全独立。</li>
+</ul>
+<p>###2、Cloneable接口</p>
+<p>我们可以实现Cloneable接口进行代码拷贝，构造两个对象进行说明</p>
+<p>Address：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Address</span> <span class="keyword">implements</span> <span class="title">Cloneable</span></span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> String city;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> String street;</span><br><span class="line"></span><br><span class="line">		<span class="comment">//标准构造方法、setter、getter省略</span></span><br><span class="line"></span><br><span class="line">  	<span class="comment">//重写toString方法，便于输出结果</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">toString</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="string">"Address&#123;"</span> +</span><br><span class="line">                <span class="string">"city='"</span> + city + <span class="string">'\''</span> +</span><br><span class="line">                <span class="string">", street='"</span> + street + <span class="string">'\''</span> +</span><br><span class="line">                <span class="string">'&#125;'</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>User:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">User</span> <span class="keyword">implements</span> <span class="title">Cloneable</span></span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> String name;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> Integer age;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> Address address;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> Object <span class="title">clone</span><span class="params">()</span> <span class="keyword">throws</span> CloneNotSupportedException </span>&#123;</span><br><span class="line">        <span class="comment">//调用super.clone()方法进行拷贝</span></span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">super</span>.clone();</span><br><span class="line">    &#125;</span><br><span class="line">  </span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">toString</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="string">"User&#123;"</span> +</span><br><span class="line">                <span class="string">"name='"</span> + name + <span class="string">'\''</span> +</span><br><span class="line">                <span class="string">", age="</span> + age +</span><br><span class="line">                <span class="string">", address="</span> + address +</span><br><span class="line">                <span class="string">'&#125;'</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Address作为User的一个引用类型的属性，两个对象都实现了Cloneable接口，调用super.clone()方法进行拷贝复制，编写一个测试类，使用clone()复制一个新对象，改变新对象里的引用属性值，观察是否会影响到原对象的值：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    Address address= <span class="keyword">new</span> Address(<span class="string">"北京"</span>,<span class="string">"长安街"</span>);</span><br><span class="line">    User user = <span class="keyword">new</span> User(<span class="string">"wyj"</span>,<span class="number">28</span>,address);</span><br><span class="line">    System.out.println(<span class="string">"user = "</span> + user.toString());</span><br><span class="line">    User copyUser = <span class="keyword">null</span>;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        copyUser = (User)user.clone();</span><br><span class="line">    &#125; <span class="keyword">catch</span> (CloneNotSupportedException e) &#123;</span><br><span class="line">        e.printStackTrace();</span><br><span class="line">    &#125;</span><br><span class="line">    copyUser.getAddress().setCity(<span class="string">"上海"</span>);</span><br><span class="line">    System.out.println(<span class="string">"copyUser = "</span> + copyUser.toString());</span><br><span class="line">    System.out.println(<span class="string">"second print user = "</span> + user.toString());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>输出结果：</p>
+<blockquote>
+<p>user = User{name=’wyj’, age=28, address=Address{city=’北京’, street=’长安街’}}<br>copyUser = User{name=’wyj’, age=28, address=Address{city=’上海’, street=’长安街’}}<br>second print user = User{name=’wyj’, age=28, address=Address{city=’上海’, street=’长安街’}}</p>
+</blockquote>
+<p>可以看出，将新复制出来的user对象中的address属性的city值由”北京“设置为”上海“，再次输出原user的值，发现city值也变为了”上海“,即可说明，user和copuUser的值都是指向了一个Address，即Cloneable接口默认实现的是浅拷贝，那么如何实现深拷贝呢？</p>
+<h3 id="3、重写Clone-方法，实现深拷贝"><a href="#3、重写Clone-方法，实现深拷贝" class="headerlink" title="3、重写Clone()方法，实现深拷贝"></a>3、重写Clone()方法，实现深拷贝</h3><p>道理很简单，我们需要重写User类的clone()方法达到深拷贝的目的，代码如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">clone</span><span class="params">()</span> <span class="keyword">throws</span> CloneNotSupportedException </span>&#123;</span><br><span class="line">    User user = (User) <span class="keyword">super</span>.clone();</span><br><span class="line">    <span class="comment">//复制一个新的address设置到user中</span></span><br><span class="line">    user.address = (Address) <span class="keyword">this</span>.address.clone();</span><br><span class="line">    <span class="keyword">return</span> user;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在clone()方法中，调用super.clone后，我们重新对得到的user的address赋新值，来避免和原user中的address值一样，注意：<strong>如果Address中也有引用类型属性，也要对其clone方法进行重写</strong>，拷贝对象有多层引用要重写多层clone()方法。再次输出结果：</p>
+<blockquote>
+<p>user = User{name=’wyj’, age=28, address=Address{city=’北京’, street=’长安街’}}<br>copyUser = User{name=’wyj’, age=28, address=Address{city=’上海’, street=’长安街’}}<br>second print user = User{name=’wyj’, age=28, address=Address{city=’北京’, street=’长安街’}}</p>
+</blockquote>
+<p>可以看到，这次user和copyUser中的值互不影响，实现了深拷贝。</p>
+<h2 id="三、总结"><a href="#三、总结" class="headerlink" title="三、总结"></a>三、总结</h2><p>深拷贝、浅拷贝，并未好坏之分，要看业务场景，深拷贝实现时会重新new出一个新的引用，所以开销也要比浅拷贝大，回到ehecache的问题上，如果仅是从缓存中国取出数据返给前端，不需要对数据进行加工，也就无所谓复制新对象了。-</p>
+<p>欢迎拍砖，欢迎交流~</p>
+<p>注：转载请注明出处</p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
     <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/02/24/springboot自动配置/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -1126,7 +1301,7 @@
               
                 <a href="/archives/">
               
-                  <span class="site-state-item-count">4</span>
+                  <span class="site-state-item-count">5</span>
                   <span class="site-state-item-name">posts</span>
                 </a>
               </div>
@@ -1137,7 +1312,7 @@
               
               <div class="site-state-item site-state-categories">
                 <a href="/categories/index.html">
-                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-count">4</span>
                   <span class="site-state-item-name">categories</span>
                 </a>
               </div>
@@ -1148,7 +1323,7 @@
               
               <div class="site-state-item site-state-tags">
                 <a href="/tags/index.html">
-                  <span class="site-state-item-count">5</span>
+                  <span class="site-state-item-count">7</span>
                   <span class="site-state-item-name">tags</span>
                 </a>
               </div>
