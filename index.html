@@ -263,6 +263,180 @@
   
   
   <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/07/08/Mybatis源码学习一-SqlSessionFactoryBuilder-md/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="wangyingjiejt">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="王迎接的博客">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2020/07/08/Mybatis源码学习一-SqlSessionFactoryBuilder-md/" itemprop="url">Mybatis源码学习一--SqlSessionFactoryBuilder.md</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2020-07-08T22:29:25+08:00">
+                2020-07-08
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Mybaits学习/" itemprop="url" rel="index">
+                    <span itemprop="name">Mybaits学习</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="Mybatis源码学习-1-–SqlSessionFactoryBuilder"><a href="#Mybatis源码学习-1-–SqlSessionFactoryBuilder" class="headerlink" title="Mybatis源码学习(1)–SqlSessionFactoryBuilder"></a>Mybatis源码学习(1)–SqlSessionFactoryBuilder</h1><h2 id="一、源码阅读的入口"><a href="#一、源码阅读的入口" class="headerlink" title="一、源码阅读的入口"></a>一、源码阅读的入口</h2><p>阅读Mybatis源码的入口是类：<strong>SqlSessionFactoryBuilder</strong>，我们都知道sqlsession是mytais最核心类之一，而sqlsession是通过sqlSessionFactory工厂创建的，sqlSessionFactory采取的是builder构建者模式，也就是本类。</p>
+<h2 id="二、构建SqlSessionFactory"><a href="#二、构建SqlSessionFactory" class="headerlink" title="二、构建SqlSessionFactory"></a>二、构建SqlSessionFactory</h2><p>sqlSessionFactoryBuilder总提供了9中build()方法来构建factory，其中有两个是最主要的加载方式：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> SqlSessionFactory <span class="title">build</span><span class="params">(Reader reader, String environment, Properties properties)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">      <span class="comment">//委托XMLConfigBuilder来解析xml文件，并构建</span></span><br><span class="line">    XMLConfigBuilder parser = <span class="keyword">new</span> XMLConfigBuilder(reader, environment, properties);</span><br><span class="line">    <span class="keyword">return</span> build(parser.parse());</span><br><span class="line">  &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">      <span class="comment">//这里是捕获异常，包装成自己的异常并抛出的idiom？，最后还要reset ErrorContext</span></span><br><span class="line">    <span class="keyword">throw</span> ExceptionFactory.wrapException(<span class="string">"Error building SqlSession."</span>, e);</span><br><span class="line">  &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">    ErrorContext.instance().reset();</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      reader.close();</span><br><span class="line">    &#125; <span class="keyword">catch</span> (IOException e) &#123;</span><br><span class="line">      <span class="comment">// Intentionally ignore. Prefer previous error.</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>和：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> SqlSessionFactory <span class="title">build</span><span class="params">(InputStream inputStream, String environment, Properties properties)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    XMLConfigBuilder parser = <span class="keyword">new</span> XMLConfigBuilder(inputStream, environment, properties);</span><br><span class="line">    <span class="keyword">return</span> build(parser.parse());</span><br><span class="line">  &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">    <span class="keyword">throw</span> ExceptionFactory.wrapException(<span class="string">"Error building SqlSession."</span>, e);</span><br><span class="line">  &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">    ErrorContext.instance().reset();</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      inputStream.close();</span><br><span class="line">    &#125; <span class="keyword">catch</span> (IOException e) &#123;</span><br><span class="line">      <span class="comment">// Intentionally ignore. Prefer previous error.</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其它集中方法最终都是调用这两个方法实现加载配置，看两个方法的入参可以知道连个方法的唯一区别就是：上边的方法接收<strong>Reader</strong>（java.io.Reader），下边的方法接收<strong>InputStream</strong>（java.io.InputStream），两种方法均可读取配置文件。不难发现两种方法殊途同归，都是委托<strong>XMLConfigBuilder</strong>来解析xml文件从而构建SqlSessionFactory。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">XMLConfigBuilder parser = <span class="keyword">new</span> XMLConfigBuilder(reader, environment, properties);</span><br><span class="line"><span class="keyword">return</span> build(parser.parse());</span><br></pre></td></tr></table></figure>
+<h2 id="三、拓展：为什么使用工厂模式？"><a href="#三、拓展：为什么使用工厂模式？" class="headerlink" title="三、拓展：为什么使用工厂模式？"></a>三、拓展：为什么使用工厂模式？</h2><p>我们在各种源码中发现工厂模式满天飞，工厂模式有什么优点呢？</p>
+<p>####先了解下工厂模式</p>
+<p>工厂方法模式包含如下角色：</p>
+<ul>
+<li>Product：抽象产品</li>
+<li>ConcreteProduct：具体产品</li>
+<li>Factory：抽象工厂</li>
+<li>ConcreteFactory：具体工厂</li>
+</ul>
+<p>工厂模式的时序图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/14480907-f7c6924756a4bb05.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="image-20200703002301754.png"></p>
+<p>####工厂模式的优点：<br><img src="https://upload-images.jianshu.io/upload_images/14480907-0973d5a71f16965e.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="image-20200703002318906.png"></p>
+<ul>
+<li><p>工厂模式用来创建客户端所需要的产品，同时隐藏了具体创建的细节，尤其适合创建过程比较复杂的类，这样用户只需关心所需要的产品对应的工厂，无需关系关心创建细节。</p>
+</li>
+<li><p>通过引入配置文件，可以在不修改任何客户端代码的情况下更换和增加新的具体产品类，在一定程度上提高了系统的灵活性。</p>
+</li>
+</ul>
+<h4 id="使用环境"><a href="#使用环境" class="headerlink" title="使用环境"></a>使用环境</h4><ul>
+<li>工厂类负责创建的对象比较少：由于创建的对象较少，不会造成工厂方法中的业务逻辑太过复杂。</li>
+<li>客户端只知道传入工厂类的参数，对于如何创建对象不关心：客户端既不需要关心创建细节，甚至连类名都不需要记住，只需要知道类型所对应的参数。</li>
+</ul>
+<blockquote>
+<p><strong>引用</strong></p>
+</blockquote>
+<p>简单工厂模式<a href="https://design-patterns.readthedocs.io/zh_CN/latest/creational_patterns/simple_factory.html" target="_blank" rel="noopener">链接</a></p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
     <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/03/15/使用Ehcache要注意的对象拷贝问题/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -1300,7 +1474,7 @@
               
                 <a href="/archives/">
               
-                  <span class="site-state-item-count">5</span>
+                  <span class="site-state-item-count">6</span>
                   <span class="site-state-item-name">posts</span>
                 </a>
               </div>
@@ -1311,7 +1485,7 @@
               
               <div class="site-state-item site-state-categories">
                 <a href="/categories/index.html">
-                  <span class="site-state-item-count">4</span>
+                  <span class="site-state-item-count">5</span>
                   <span class="site-state-item-name">categories</span>
                 </a>
               </div>
@@ -1322,7 +1496,7 @@
               
               <div class="site-state-item site-state-tags">
                 <a href="/tags/index.html">
-                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-count">9</span>
                   <span class="site-state-item-name">tags</span>
                 </a>
               </div>
